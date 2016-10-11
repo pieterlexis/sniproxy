@@ -1,6 +1,6 @@
 Name: sniproxy
 Version: @VERSION@
-Release: 1.pdns%{?dist}
+Release: 1.pdns
 Summary: Transparent TLS proxy
 
 Group: System Environment/Daemons
