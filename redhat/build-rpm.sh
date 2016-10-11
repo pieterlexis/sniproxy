@@ -39,6 +39,11 @@ if [ ! -z "$(git rev-parse --abbrev-ref HEAD 2> /dev/null)" ]; then
   VERSION="${LAST_TAG}+${COMMITS_SINCE_TAG}${BRANCH}.${GIT_HASH}${DIRTY}"
 fi
 
+if [ "$1" == "gen-version" ]; then
+  printf "$VERSION"
+  exit 0
+fi
+
 rm -rf /tmp/sniproxy.spec
 cp redhat/sniproxy-pdns.spec /tmp/sniproxy.spec
 
