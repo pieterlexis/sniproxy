@@ -1,3 +1,20 @@
+%if %{?rhel} < 6
+exit 1
+%endif
+
+%define upstart_post() \
+  if [ -x /sbin/initctl ]; then \
+    /sbin/initctl start %1 \
+  fi\
+%{nil}
+
+%define upstart_postun() \
+  if [ -x /sbin/initctl ] && /sbin/initctl status %1 2>/dev/null | grep -q 'running' ; then \
+    /sbin/initctl stop %1 >/dev/null 2>&1 \
+    [ -f /etc/init/%1.conf ] && { echo -n "Re-"; /sbin/initctl start %1; }; \
+  fi \
+%{nil}
+
 Name: sniproxy
 Version: @VERSION@
 Release: 1pdns%{?dist}
@@ -10,7 +27,6 @@ URL: https://github.com/dlundquist/sniproxy
 BuildRequires: autoconf
 BuildRequires: automake
 BuildRequires: curl
-BuildRequires: systemd
 BuildRequires: libev-devel
 BuildRequires: lua-devel
 BuildRequires: pcre-devel
@@ -22,9 +38,14 @@ BuildRequires: gettext-devel
 BuildRequires: perl(Time::HiRes)
 
 Requires(pre):    shadow-utils
-Requires(post):   systemd
-Requires(preun):  systemd
-Requires(postun): systemd
+%if %{?rhel} >= 7
+BuildRequires: systemd
+Requires(post): systemd-units
+Requires(preun): systemd-units
+Requires(postun): systemd-units
+%else
+Requires: util-linux-ng
+%endif
 
 %description
 SNIproxy proxies incoming HTTP and TLS connections based on the host name
@@ -45,9 +66,14 @@ make %{?_smp_mflags}
 %install
 make install DESTDIR=%{buildroot}
 mkdir -p %{buildroot}%{_sysconfdir}
-mkdir -p %{buildroot}%{_unitdir}
 install -p -m 644 redhat/sniproxy.conf %{buildroot}%{_sysconfdir}/
+%if 0%{?rhel} >= 7
+mkdir -p %{buildroot}%{_unitdir}
 install -p -m 644 redhat/sniproxy.service %{buildroot}%{_unitdir}
+%else
+mkdir -p %{buildroot}%{_sysconfdir}/init
+install -p -m 644 redhat/sniproxy-upstart.conf %{buildroot}%{_sysconfdir}/init/sniproxy.conf
+%endif
 
 #%check
 #make check
@@ -59,13 +85,23 @@ getent passwd sniproxy &>/dev/null || \
     -d / sniproxy
 
 %post
+%if 0%{?rhel} >= 7
 %systemd_post sniproxy.service
+%else
+%upstart_post sniproxy
+%endif
 
+%if 0%{?rhel} >= 7
 %preun
 %systemd_preun sniproxy.service
+%endif
 
 %postun
+%if 0%{?rhel} >= 7
 %systemd_postun sniproxy.service
+%else
+%upstart_postun sniproxy
+%endif
 
 %files
 
@@ -73,6 +109,10 @@ getent passwd sniproxy &>/dev/null || \
 
 %{_sbindir}/sniproxy
 %doc COPYING README.md AUTHORS ChangeLog
+%if 0%{?rhel} >= 7
 %{_unitdir}/sniproxy.service
+%else
+%{_sysconfdir}/init/sniproxy.conf
+%endif
 %{_mandir}/man8/sniproxy.8*
 %{_mandir}/man5/sniproxy.conf.5*
