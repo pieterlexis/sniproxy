@@ -29,3 +29,5 @@ INSTALL
 sniproxy-*.tar.gz
 tags
 test-driver
+*.rpm
+*.deb
