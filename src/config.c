@@ -186,6 +186,7 @@ static struct Keyword global_grammar[] = {
 };
 
 static const char *resolver_mode_names[] = {
+    "DEFAULT",
     "ipv4_only",
     "ipv6_only",
     "ipv4_first",
@@ -447,7 +448,7 @@ accept_logger_priority(struct LoggerBuilder *lb, char *priority) {
     };
 
     for (size_t i = 0; i < sizeof(priorities) / sizeof(priorities[0]); i++)
-        if(strncasecmp(priorities[i].name, priority, strlen(priority)) == 0) {
+        if (strncasecmp(priorities[i].name, priority, strlen(priority)) == 0) {
             lb->priority = priorities[i].priority;
             return 1;
         }
@@ -622,7 +623,7 @@ accept_resolver_search(struct ResolverConfig *resolver, char *search) {
 
 static int
 accept_resolver_mode(struct ResolverConfig *resolver, char *mode) {
-    for (int i = 0; i < sizeof(resolver_mode_names) / sizeof(resolver_mode_names[0]); i++)
+    for (size_t i = 0; i < sizeof(resolver_mode_names) / sizeof(resolver_mode_names[0]); i++)
         if (strncasecmp(resolver_mode_names[i], mode, strlen(mode)) == 0) {
             resolver->mode = i;
             return 1;

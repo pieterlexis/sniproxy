@@ -190,6 +190,7 @@ new_listener() {
     listener->protocol = tls_protocol;
     listener->table_name = NULL;
     listener->access_log = NULL;
+    listener->transparent_proxy = 0;
     listener->log_bad_requests = 0;
     listener->reference_count = 0;
     /* Initializes sock fd to negative sentinel value to indicate watchers
@@ -297,9 +298,19 @@ accept_listener_fallback_address(struct Listener *listener, char *fallback) {
 
 int
 accept_listener_source_address(struct Listener *listener, char *source) {
-    if (listener->source_address != NULL) {
+    if (listener->source_address != NULL || listener->transparent_proxy) {
         err("Duplicate source address: %s", source);
         return 0;
+    }
+
+    if (strcasecmp("client", source) == 0) {
+#ifdef IP_TRANSPARENT
+        listener->transparent_proxy = 1;
+        return 1;
+#else
+        err("Transparent proxy not supported on this platform.");
+        return 0;
+#endif
     }
 
     listener->source_address = new_address(source);
@@ -419,17 +430,26 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
         address_set_port(listener->fallback_address,
                 address_port(listener->address));
 
+#ifdef HAVE_ACCEPT4
+    int sockfd = socket(address_sa(listener->address)->sa_family, SOCK_STREAM | SOCK_NONBLOCK, 0);
+#else
     int sockfd = socket(address_sa(listener->address)->sa_family, SOCK_STREAM, 0);
+#endif
     if (sockfd < 0) {
         err("socket failed: %s", strerror(errno));
-        return -2;
+        return sockfd;
     }
 
     /* set SO_REUSEADDR on server socket to facilitate restart */
     int on = 1;
-    setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+    int result = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+    if (result < 0) {
+        err("setsockopt SO_REUSEADDR failed: %s", strerror(errno));
+        close(sockfd);
+        return result;
+    }
 
-    int result = bind(sockfd, address_sa(listener->address),
+    result = bind(sockfd, address_sa(listener->address),
             address_sa_len(listener->address));
     if (result < 0 && errno == EACCES) {
         /* Retry using binder module */
@@ -439,26 +459,27 @@ init_listener(struct Listener *listener, const struct Table_head *tables, struct
         if (sockfd < 0) {
             err("binder failed to bind to %s",
                 display_address(listener->address, address, sizeof(address)));
-            close(sockfd);
-            return -3;
+            return sockfd;
         }
     } else if (result < 0) {
         err("bind %s failed: %s",
             display_address(listener->address, address, sizeof(address)),
             strerror(errno));
         close(sockfd);
-        return -3;
+        return result;
     }
 
-    if (listen(sockfd, SOMAXCONN) < 0) {
+    result = listen(sockfd, SOMAXCONN);
+    if (result < 0) {
         err("listen failed: %s", strerror(errno));
         close(sockfd);
-        return -4;
+        return result;
     }
 
-
+#ifndef HAVE_ACCEPT4
     int flags = fcntl(sockfd, F_GETFL, 0);
     fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+#endif
 
     listener_ref_get(listener);
     ev_io_init(&listener->watcher, accept_cb, sockfd, EV_READ);
