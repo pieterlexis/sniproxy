@@ -38,6 +38,7 @@ struct LoggerBuilder {
 };
 
 static int accept_username(struct Config *, char *);
+static int accept_groupname(struct Config *, char *);
 static int accept_pidfile(struct Config *, char *);
 static int accept_luafilename(struct Config *, char *);
 static int end_listener_stanza(struct Config *, struct Listener *);
@@ -147,6 +148,11 @@ static struct Keyword global_grammar[] = {
             (int(*)(void *, char *))accept_username,
             NULL,
             NULL},
+    { "groupname",
+            NULL,
+            (int(*)(void *, char *))accept_groupname,
+            NULL,
+            NULL},
     { "pidfile",
             NULL,
             (int(*)(void *, char *))accept_pidfile,
@@ -204,6 +210,7 @@ init_config(const char *filename, struct ev_loop *loop) {
 
     config->filename = NULL;
     config->user = NULL;
+    config->group = NULL;
     config->pidfile = NULL;
     config->luafilename = NULL;
     config->access_log = NULL;
@@ -260,6 +267,7 @@ void
 free_config(struct Config *config, struct ev_loop *loop) {
     free(config->filename);
     free(config->user);
+    free(config->group);
     free(config->pidfile);
     free(config->luafilename);
 
@@ -329,6 +337,17 @@ static int
 accept_username(struct Config *config, char *username) {
     config->user = strdup(username);
     if (config->user == NULL) {
+        err("%s: strdup", __func__);
+        return -1;
+    }
+
+    return 1;
+}
+
+static int
+accept_groupname(struct Config *config, char *groupname) {
+    config->group = strdup(groupname);
+    if (config->group == NULL) {
         err("%s: strdup", __func__);
         return -1;
     }

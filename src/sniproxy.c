@@ -53,7 +53,7 @@ static void usage();
 static void daemonize(void);
 static void write_pidfile(const char *, pid_t);
 static void set_limits(int);
-static void drop_perms(const char* username);
+static void drop_perms(const char* username, const char* groupname);
 static void perror_exit(const char *);
 static void signal_cb(struct ev_loop *, struct ev_signal *, int revents);
 
@@ -123,7 +123,7 @@ main(int argc, char **argv) {
     init_listeners(&config->listeners, &config->tables, EV_DEFAULT);
 
     /* Drop permissions only when we can */
-    drop_perms(config->user ? config->user : default_username);
+    drop_perms(config->user ? config->user : default_username, config->group);
 
     if(config->luafilename) {
         lua_state = luaL_newstate();
@@ -224,7 +224,7 @@ set_limits(int max_nofiles) {
 }
 
 static void
-drop_perms(const char *username) {
+drop_perms(const char *username, const char *groupname) {
     /* check if we are already an unprivileged user */
     if (getuid() != 0)
         return;
@@ -236,11 +236,25 @@ drop_perms(const char *username) {
     else if (user == NULL)
         fatal("getpwnam(): user %s does not exist", username);
 
+    gid_t gid = user->pw_gid;
+
+    if (groupname) {
+      errno = 0;
+      struct group *group = getgrnam(groupname);
+      if (errno)
+        fatal("getgrnam(): %s", strerror(errno));
+      else if (group == NULL)
+        fatal("getgrnam(): group %s does not exist", groupname);
+
+      gid = group->gr_gid;
+    }
+
     /* drop any supplementary groups */
-    if (setgroups(1, &user->pw_gid) < 0)
+    if (setgroups(1, &gid) < 0)
         fatal("setgroups(): %s", strerror(errno));
 
-    if (setgid(user->pw_gid) < 0)
+    /* set the main gid */
+    if (setgid(gid) < 0)
         fatal("setgid(): %s", strerror(errno));
 
     if (setuid(user->pw_uid) < 0)
