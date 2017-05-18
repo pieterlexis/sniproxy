@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 and 2012, Dustin Lundquist <dustin@null-ptr.net>
+ * Copyright (c) 2017, Pieter Lexis <pieter.lexis@powerdns.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -23,36 +23,21 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef CONFIG_H
-#define CONFIG_H
+#include <stdlib.h>
+#include "stats.h"
 
-#include <stdio.h>
-#include "table.h"
-#include "listener.h"
 
-struct Config {
-    char *filename;
-    char *user;
-    char *group;
-    char *pidfile;
-    struct ResolverConfig {
-        char **nameservers;
-        char **search;
-        int mode;
-    } resolver;
-    struct CarbonConfig {
-        struct Address *host;
-        char *myname;
-        uint16_t interval;
-    } carbon;
-    struct Logger *access_log;
-    struct Listener_head listeners;
-    struct Table_head tables;
-};
+struct Statistics * init_statistics() {
+  struct Statistics *statistics = malloc(sizeof(struct Statistics));
+  statistics->numIncomingConns = 0;
+  statistics->numOutGoingConns = 0;
+  statistics->numErroredOutgoingConns = 0;
+  statistics->numBytesIn = 0;
+  statistics->numBytesOut = 0;
 
-struct Config *init_config(const char *, struct ev_loop *);
-void reload_config(struct Config *, struct ev_loop *);
-void free_config(struct Config *, struct ev_loop *);
-void print_config(FILE *, struct Config *);
+  return statistics;
+}
 
-#endif
+void sendStats(struct Statistics * statistics) {
+  // Open conn etc.
+}

@@ -44,6 +44,7 @@
 #include "listener.h"
 #include "resolv.h"
 #include "logger.h"
+#include "stats.h"
 
 
 static void usage();
@@ -53,15 +54,18 @@ static void set_limits(int);
 static void drop_perms(const char* username, const char* groupname);
 static void perror_exit(const char *);
 static void signal_cb(struct ev_loop *, struct ev_signal *, int revents);
+static void statistics_cb (EV_P_ ev_timer *w, int revents);
 
 
 static const char *sniproxy_version = PACKAGE_VERSION;
 static const char *default_username = "daemon";
 static struct Config *config;
+static struct Statistics *statistics;
 static struct ev_signal sighup_watcher;
 static struct ev_signal sigusr1_watcher;
 static struct ev_signal sigint_watcher;
 static struct ev_signal sigterm_watcher;
+static struct ev_timer statistics_watcher;
 
 
 int
@@ -98,6 +102,8 @@ main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
+    statistics = init_statistics();
+
     /* ignore SIGPIPE, or it will kill us */
     signal(SIGPIPE, SIG_IGN);
 
@@ -129,6 +135,9 @@ main(int argc, char **argv) {
     ev_signal_start(EV_DEFAULT, &sigusr1_watcher);
     ev_signal_start(EV_DEFAULT, &sigint_watcher);
     ev_signal_start(EV_DEFAULT, &sigterm_watcher);
+
+    ev_timer_init (&statistics_watcher, statistics_cb, 5, 5);
+    ev_timer_start (EV_DEFAULT, &statistics_watcher);
 
     resolv_init(EV_DEFAULT, config->resolver.nameservers,
             config->resolver.search, config->resolver.mode);
@@ -287,4 +296,10 @@ signal_cb(struct ev_loop *loop, struct ev_signal *w, int revents) {
                 ev_unloop(loop, EVUNLOOP_ALL);
         }
     }
+}
+
+static void
+statistics_cb (EV_P_ ev_timer *w, int revents)
+{
+  printf("In statistics_cb\n");
 }

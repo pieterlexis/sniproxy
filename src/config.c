@@ -26,6 +26,8 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <unistd.h>
+#include <errno.h>
 #include "cfg_parser.h"
 #include "config.h"
 #include "logger.h"
@@ -55,6 +57,11 @@ static int accept_resolver_nameserver(struct ResolverConfig *, char *);
 static int accept_resolver_search(struct ResolverConfig *, char *);
 static int accept_resolver_mode(struct ResolverConfig *, char *);
 static int end_resolver_stanza(struct Config *, struct ResolverConfig *);
+static struct CarbonConfig *new_carbon_config();
+static int accept_carbon_host(struct CarbonConfig *, char *);
+static int accept_carbon_myname(struct CarbonConfig *, char *);
+static int accept_carbon_interval(struct CarbonConfig *, char *);
+static int end_carbon_stanza(struct Config *, struct CarbonConfig *);
 static size_t string_vector_len(char **);
 static int append_to_string_vector(char ***, const char *);
 static void free_string_vector(char **);
@@ -94,6 +101,25 @@ struct Keyword resolver_stanza_grammar[] = {
     { "mode",
             NULL,
             (int(*)(void *, char *))accept_resolver_mode,
+            NULL,
+            NULL},
+    { NULL, NULL, NULL, NULL, NULL },
+};
+
+struct Keyword carbon_stanza_grammar[] = {
+    { "host",
+            NULL,
+            (int(*)(void *, char *))accept_carbon_host,
+            NULL,
+            NULL},
+    { "myname",
+            NULL,
+            (int(*)(void *, char *))accept_carbon_myname,
+            NULL,
+            NULL},
+    { "interval",
+            NULL,
+            (int(*)(void *, char *))accept_carbon_interval,
             NULL,
             NULL},
     { NULL, NULL, NULL, NULL, NULL },
@@ -162,6 +188,11 @@ static struct Keyword global_grammar[] = {
             NULL,
             resolver_stanza_grammar,
             (int(*)(void *, void *))end_resolver_stanza},
+    { "carbon",
+            (void *(*)())new_carbon_config,
+            NULL,
+            carbon_stanza_grammar,
+            (int(*)(void *, void *))end_carbon_stanza},
     { "error_log",
             (void *(*)())new_logger_builder,
             NULL,
@@ -210,6 +241,9 @@ init_config(const char *filename, struct ev_loop *loop) {
     config->resolver.nameservers = NULL;
     config->resolver.search = NULL;
     config->resolver.mode = 0;
+    config->carbon.host = NULL;
+    config->carbon.myname = NULL;
+    config->carbon.interval = 30;
     SLIST_INIT(&config->listeners);
     SLIST_INIT(&config->tables);
 
@@ -561,6 +595,19 @@ new_resolver_config() {
     return resolver;
 }
 
+static struct CarbonConfig *
+new_carbon_config() {
+    struct CarbonConfig *carbon = malloc(sizeof(struct CarbonConfig));
+
+    if (carbon != NULL) {
+        carbon->host = NULL;
+        carbon->myname = NULL;
+        carbon->interval = 30;
+    }
+
+    return carbon;
+}
+
 static size_t
 string_vector_len(char **vector) {
     size_t len = 0;
@@ -662,4 +709,62 @@ print_resolver_config(FILE *file, struct ResolverConfig *resolver) {
     fprintf(file, "\tmode %s\n", resolver_mode_names[resolver->mode]);
 
     fprintf(file, "}\n\n");
+}
+
+static int
+accept_carbon_host(struct CarbonConfig *carbon, char *host) {
+    struct Address *carbon_address = new_address(host);
+
+    if (!address_is_sockaddr(carbon_address)) {
+        free(carbon_address);
+        err("%s: not an IP address", host);
+        return -1;
+    }
+
+    carbon->host = carbon_address;
+
+    if (address_port(carbon->host) == 0)
+      address_set_port(carbon->host, 2003);
+
+    return 1;
+}
+
+static int
+accept_carbon_myname(struct CarbonConfig *carbon, char *myname) {
+    char* configured_myname;
+    configured_myname = strdup(myname);
+
+    if (myname == NULL || strlen(myname) == 0) {
+      if(gethostname(configured_myname, ADDRESS_BUFFER_SIZE)) {
+        err("%s: gethostname", __func__);
+        return -1;
+      }
+    }
+
+    /* Replace all dots with dashes */
+    for (char* result = configured_myname; *result != '\0'; ++result)
+      if (*result == '.')
+        *result = '-';
+
+    carbon->myname = configured_myname;
+    return 1;
+}
+
+static int
+accept_carbon_interval(struct CarbonConfig *carbon, char *interval) {
+  uint16_t configured_interval = strtol(interval, NULL, 10);
+  if (configured_interval == 0 || errno == ERANGE) {
+    err("%s: strtol", __func__);
+    return -1;
+  }
+  carbon->interval = configured_interval;
+  return 1;
+}
+
+static int
+end_carbon_stanza(struct Config *config, struct CarbonConfig *carbon) {
+    config->carbon = *carbon;
+    free(carbon);
+
+    return 1;
 }
