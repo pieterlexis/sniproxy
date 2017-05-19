@@ -136,7 +136,7 @@ main(int argc, char **argv) {
     ev_signal_start(EV_DEFAULT, &sigint_watcher);
     ev_signal_start(EV_DEFAULT, &sigterm_watcher);
 
-    ev_timer_init (&statistics_watcher, statistics_cb, 5, 5);
+    ev_timer_init (&statistics_watcher, statistics_cb, 0, config->carbon.interval);
     ev_timer_start (EV_DEFAULT, &statistics_watcher);
 
     resolv_init(EV_DEFAULT, config->resolver.nameservers,
@@ -301,5 +301,9 @@ signal_cb(struct ev_loop *loop, struct ev_signal *w, int revents) {
 static void
 statistics_cb (EV_P_ ev_timer *w, int revents)
 {
-  printf("In statistics_cb\n");
+  /* If no host is set, we can't send statistics */
+  if (config->carbon.host == NULL)
+    return;
+
+  sendStats(statistics, config->carbon.host, config->carbon.myname);
 }

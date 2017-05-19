@@ -23,6 +23,8 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+#include "address.h"
+
 struct Statistics {
   int numIncomingConns;
   int numOutGoingConns;
@@ -32,4 +34,4 @@ struct Statistics {
 };
 
 struct Statistics * init_statistics();
-void sendStats(struct Statistics * statistics);
+void sendStats(const struct Statistics *, const struct Address *, const char*);
