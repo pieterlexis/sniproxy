@@ -28,7 +28,7 @@ BuildRequires: autoconf
 BuildRequires: automake
 BuildRequires: curl
 BuildRequires: libev-devel
-BuildRequires: lua-devel
+BuildRequires: luajit-devel
 BuildRequires: pcre-devel
 BuildRequires: perl
 BuildRequires: udns-devel
@@ -60,7 +60,7 @@ whether to allow or deny connections.
 touch config.rpath
 autoreconf -fvi
 CFLAGS="${CFLAGS:-%optflags} -I/usr/include/libev" ; export CFLAGS ;
-%configure
+%configure --with-luajit
 make %{?_smp_mflags}
 
 %install
